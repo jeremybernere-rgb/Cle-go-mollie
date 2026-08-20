@@ -1,0 +1,16 @@
+{
+  "name": "cle-go-mollie-klarna",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini application mobile pour cr\u00e9er des liens de paiement Mollie avec Klarna.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

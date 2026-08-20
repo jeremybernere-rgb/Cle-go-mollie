@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Clé & Go — Paiement Klarna</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#0b1020; color:#f8fafc; min-height:100vh; }
+    .wrap { max-width:620px; margin:0 auto; padding:28px 18px 54px; }
+    .brand { font-weight:800; font-size:28px; letter-spacing:-.5px; }
+    .sub { color:#94a3b8; margin:6px 0 24px; }
+    .card { background:#111827; border:1px solid #273449; border-radius:20px; padding:18px; margin-bottom:16px; box-shadow:0 14px 40px rgba(0,0,0,.22); }
+    h2 { font-size:16px; margin:0 0 14px; color:#e2e8f0; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .full { grid-column:1/-1; }
+    label { display:block; font-size:12px; color:#94a3b8; margin:0 0 6px; }
+    input, select, textarea {
+      width:100%; border:1px solid #334155; background:#0f172a; color:white;
+      border-radius:12px; padding:13px 12px; font-size:16px; outline:none;
+    }
+    textarea { min-height:74px; resize:vertical; }
+    input:focus,select:focus,textarea:focus { border-color:#94a3b8; }
+    .amount { font-size:26px; font-weight:750; }
+    button {
+      width:100%; border:0; border-radius:14px; padding:15px 16px; font-size:17px;
+      font-weight:750; cursor:pointer; background:#fff; color:#111827;
+    }
+    button.secondary { margin-top:10px; background:#1e293b; color:#fff; border:1px solid #334155; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .result { display:none; }
+    .ok { color:#86efac; font-weight:700; margin-bottom:10px; }
+    .err { color:#fca5a5; white-space:pre-wrap; }
+    .url {
+      display:block; word-break:break-all; background:#0f172a; border:1px solid #334155;
+      padding:12px; border-radius:12px; color:#cbd5e1; margin:10px 0;
+    }
+    .hint { font-size:12px; color:#64748b; line-height:1.45; margin-top:10px; }
+    @media (max-width:520px) { .grid { grid-template-columns:1fr; } .full { grid-column:auto; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">Clé & Go</div>
+    <div class="sub">Créer un lien de paiement Mollie avec Klarna</div>
+
+    <form id="form">
+      <div class="card">
+        <h2>Paiement</h2>
+        <div class="grid">
+          <div>
+            <label>Montant TTC (€)</label>
+            <input class="amount" id="amount" inputmode="decimal" placeholder="450,00" required>
+          </div>
+          <div>
+            <label>Code PIN de l'application</label>
+            <input id="pin" inputmode="numeric" type="password" placeholder="••••" required>
+          </div>
+          <div class="full">
+            <label>Description de la prestation</label>
+            <textarea id="description" placeholder="Ex. Double de clé BMW X1" required></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Client — informations demandées par Klarna</h2>
+        <div class="grid">
+          <div>
+            <label>Prénom</label>
+            <input id="givenName" autocomplete="given-name" required>
+          </div>
+          <div>
+            <label>Nom</label>
+            <input id="familyName" autocomplete="family-name" required>
+          </div>
+          <div class="full">
+            <label>E-mail</label>
+            <input id="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="full">
+            <label>Téléphone (facultatif)</label>
+            <input id="phone" type="tel" autocomplete="tel">
+          </div>
+          <div class="full">
+            <label>Adresse et numéro</label>
+            <input id="streetAndNumber" autocomplete="street-address" placeholder="12 rue ..." required>
+          </div>
+          <div>
+            <label>Code postal</label>
+            <input id="postalCode" autocomplete="postal-code" required>
+          </div>
+          <div>
+            <label>Ville</label>
+            <input id="city" autocomplete="address-level2" required>
+          </div>
+          <div class="full">
+            <label>Code pays ISO (2 lettres)</label>
+            <input id="country" maxlength="2" value="FR" autocapitalize="characters" required>
+            <div class="hint">
+              Utilise le pays réel de facturation du client. Klarna n'est pas disponible dans tous les pays.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button id="createBtn" type="submit">Créer le lien Klarna</button>
+    </form>
+
+    <div class="card result" id="result">
+      <div class="ok">Lien créé ✓</div>
+      <a class="url" id="paymentUrl" target="_blank" rel="noopener"></a>
+      <button class="secondary" id="copyBtn" type="button">Copier le lien</button>
+      <button class="secondary" id="waBtn" type="button">Envoyer sur WhatsApp</button>
+    </div>
+
+    <div class="card result" id="errorBox">
+      <div class="err" id="errorText"></div>
+    </div>
+  </div>
+
+<script>
+const form = document.getElementById("form");
+const btn = document.getElementById("createBtn");
+const result = document.getElementById("result");
+const errorBox = document.getElementById("errorBox");
+const paymentUrl = document.getElementById("paymentUrl");
+let lastUrl = "";
+
+function v(id) { return document.getElementById(id).value.trim(); }
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  btn.disabled = true;
+  btn.textContent = "Création…";
+  result.style.display = "none";
+  errorBox.style.display = "none";
+
+  const payload = {
+    amount: v("amount"),
+    description: v("description"),
+    givenName: v("givenName"),
+    familyName: v("familyName"),
+    email: v("email"),
+    phone: v("phone"),
+    streetAndNumber: v("streetAndNumber"),
+    postalCode: v("postalCode"),
+    city: v("city"),
+    country: v("country").toUpperCase()
+  };
+
+  try {
+    const r = await fetch("/api/create-payment-link", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Pin": v("pin")
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+
+    if (!r.ok) throw new Error(data.error || "Erreur inconnue.");
+
+    lastUrl = data.url;
+    paymentUrl.textContent = data.url;
+    paymentUrl.href = data.url;
+    result.style.display = "block";
+    result.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch (err) {
+    document.getElementById("errorText").textContent = err.message;
+    errorBox.style.display = "block";
+    errorBox.scrollIntoView({ behavior: "smooth", block: "center" });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Créer le lien Klarna";
+  }
+});
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  if (!lastUrl) return;
+  await navigator.clipboard.writeText(lastUrl);
+  document.getElementById("copyBtn").textContent = "Copié ✓";
+  setTimeout(() => document.getElementById("copyBtn").textContent = "Copier le lien", 1200);
+});
+
+document.getElementById("waBtn").addEventListener("click", () => {
+  if (!lastUrl) return;
+  const msg = `Bonjour, voici votre lien sécurisé pour régler votre prestation Clé & Go avec Klarna : ${lastUrl}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+});
+</script>
+</body>
+</html>
